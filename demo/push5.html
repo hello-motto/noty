@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <title>Push Notification</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="demonstration of some noty capabilities">
+
+    <link rel="manifest" href="../manifest.json">
+
+    <link href='https://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic&amp;subset=latin,latin-ext,cyrillic' rel='stylesheet' type='text/css'>
+    <style type="text/css">
+        html {
+            height: 100%;
+            width: 100%;
+        }
+        body {
+            font-family: 'PT Sans', Tahoma, Arial, serif;
+            line-height: 13px
+        }
+    </style>
+    <link rel="stylesheet" type="text/css" href="buttons.css"/>
+</head>
+<body>
+
+<script src="jquery-1.7.2.min.js"></script>
+<script type="text/javascript" src="../js/noty/packaged/jquery.noty.packaged.js"></script>
+
+<script type="text/javascript">
+
+    var n = pushNoty({
+        title: 'Notification title',
+        body: 'Notification body',
+        tag: 'test_notification_tag',
+        icon: 'https://assets-cdn.github.com/images/modules/logos_page/GitHub-Mark.png',
+        timeout: 10000
+    });
+
+    // pushNoty function can return a Promise object when pending the user's permission answer
+    console.log('notification: ', n);
+
+</script>
+
+</body>
+</html>

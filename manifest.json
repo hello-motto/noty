@@ -1,0 +1,7 @@
+{
+  "name": "noty jquery notification plugin",
+  "short_name": "noty",
+  "start_url": "/",
+  "display": "standalone",
+  "gcm_sender_id": "619400298970"
+}

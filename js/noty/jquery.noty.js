@@ -276,7 +276,7 @@ var NotyObject = {
       });
 
     } else if (typeof self.options.animation.close == 'object' && self.options.animation.close == null) {
-      self.$bar.dequeue().hide(0, function() {
+      self.$bar.dequeue().hide(0, function () {
         if (self.options.callback.afterClose) self.options.callback.afterClose.apply(self);
         self.closeCleanUp();
       });
@@ -405,6 +405,201 @@ var NotyObject = {
   shown  : false
 
 }; // end NotyObject
+
+var NotyPushObject = {
+  init: function (options) {
+
+    // Mix in the passed in options with the default options
+    this.options = $.extend({}, $.noty.pushDefaults, options);
+
+    return this.show();
+  },
+
+  show: function () {
+
+    var self = this;
+
+    /* Safari 6+, Firefox 22+, Chrome 22+, Opera 25+ */
+    if ($.notyPushRenderer.PN) {
+
+      self.notification = new $.notyPushRenderer.PN(self.options.title, {
+            icon: self.options.icon,
+            body: self.options.body,
+            tag : self.options.tag
+          }
+      );
+
+      /* Legacy webkit browsers */
+    } else if (window.webkitNotifications) {
+
+      self.notification = window.webkitNotifications.createNotification(
+          self.options.icon,
+          self.options.title,
+          self.options.body
+      );
+      self.notification.show();
+
+      /* Firefox Mobile */
+    } else if (navigator.mozNotification) {
+
+      self.notification = navigator.mozNotification.createNotification(
+          self.options.title,
+          self.options.body,
+          self.options.icon
+      );
+
+      self.notification.show();
+
+      /* IE9+ */
+    } else if (window.external && window.external.msIsSiteMode()) {
+
+      window.external.msSiteModeClearIconOverlay();
+      window.external.msSiteModeSetIconOverlay(self.options.icon, self.options.title);
+      window.external.msSiteModeActivate();
+
+    } else {
+      throw new Error('Notifications are not supported');
+    }
+
+    if (self.notification) {
+      if (self.options.timeout) {
+        setTimeout(function () {
+          self.close();
+        }, self.options.timeout);
+      }
+
+      if (self.options.callback.show) {
+        self.notification.addEventListener('show', self.options.callback.show);
+      }
+
+      if (self.options.callback.click) {
+        self.notification.addEventListener('click', self.options.callback.click);
+      }
+
+      if (self.options.callback.error) {
+        self.notification.addEventListener('error', self.options.callback.error);
+      }
+
+      if (self.options.callback.close) {
+        self.notification.addEventListener('close', self.options.callback.close);
+      }
+
+      if (self.options.callback.error) {
+        self.notification.addEventListener('cancel', self.options.callback.cancel);
+      }
+
+    }
+
+    return this;
+  },
+
+  close: function () {
+    if (this.notification) {
+      this.notification.close();
+    }
+  }
+};
+
+$.notyPushRenderer = {};
+
+$.notyPushRenderer.permCallback = function (result) {
+  console.info('Permission request result: ', result);
+};
+
+$.notyPushRenderer.storeSubscription = function (subscription) {
+  console.info('You can override this function for storing user\'s endpoint & authentication details: ', subscription);
+};
+
+$.notyPushRenderer.init = function (options) {
+  this.PN = window.Notification;
+
+  if (this.isSupported()) {
+    if (this.needPermission()) {
+      return this.requestPermission().then(function (result) {
+        if (result === 'granted') {
+
+          // Renderer creates a new notyPush object
+          var notification = Object.create(NotyPushObject).init(options);
+          $.notyPushRenderer.render();
+          return notification;
+
+        } else {
+          // fallback to normal notifications
+          options.text = options.title + "<br>" + options.body;
+          return $.notyRenderer.init(options);
+        }
+      });
+    } else {
+      // Renderer creates a new notyPush object
+      var notification = Object.create(NotyPushObject).init(options);
+      $.notyPushRenderer.render();
+      return notification;
+    }
+  } else {
+    console.info('HTML5 Notifications are not supported. Fallback to normal notifications');
+    // fallback to normal notifications
+    options.text = options.title + "<br>" + options.body;
+    return $.notyRenderer.init(options);
+  }
+};
+
+$.notyPushRenderer.render = function () {
+
+};
+
+$.notyPushRenderer.isSupported = function () {
+  return (this.PN || this.PN.requestPermission);
+};
+
+$.notyPushRenderer.needPermission = function () {
+  return !(this.PN && this.PN.permission && this.PN.permission === 'granted');
+};
+
+$.notyPushRenderer.requestPermission = function () {
+  return this.PN.requestPermission().then(function (perm) {
+
+    // let's register our service worker for Google Cloud Messaging
+    if (perm === 'granted' && 'serviceWorker' in navigator && $.noty.pushWorker !== false) {
+      navigator.serviceWorker.register($.noty.pushWorker).then(function () {
+        navigator.serviceWorker.ready.then(function (serviceWorkerRegistration) {
+          serviceWorkerRegistration.pushManager.subscribe({
+            userVisibleOnly: true
+          }).then(function (subscription) {
+
+            var key   = subscription.getKey('p256dh');
+            var token = subscription.getKey('auth');
+            var gcmData = {
+              'endpoint': $.notyPushRenderer.getEndpoint(subscription),
+              'key'     : key ? btoa(String.fromCharCode.apply(null, new Uint8Array(key))) : null,
+              'token'   : token ? btoa(String.fromCharCode.apply(null, new Uint8Array(token))) : null
+            };
+
+            $.notyPushRenderer.storeSubscription(gcmData);
+
+          }).catch(function (err) {
+            console.error('Error occurred while worker subscribe(): ', err);
+          });
+        });
+      });
+    }
+
+    $.notyPushRenderer.permCallback(perm);
+
+    return perm;
+  });
+};
+
+$.notyPushRenderer.getEndpoint = function (subscription) {
+  var endpoint       = subscription.endpoint;
+  var subscriptionId = subscription.subscriptionId;
+
+  // fix for Chrome < 45
+  if (subscriptionId && endpoint.indexOf(subscriptionId) === -1) {
+    endpoint += '/' + subscriptionId;
+  }
+
+  return endpoint;
+};
 
 $.notyRenderer = {};
 
@@ -611,6 +806,23 @@ $.noty.defaults = {
   buttons     : false
 };
 
+$.noty.pushWorker   = '/gcm-worker.js'; // It should be at root directory otherwise promise can't resolve
+$.noty.pushDefaults = {
+  icon    : '',
+  title   : '',
+  body    : '',
+  timeout : false,
+  callback: {
+    click : function (e) {
+      e.target.close();
+    },
+    show  : function (e) {},
+    error : function (e) {},
+    close : function (e) {},
+    cancel: function (e) {}
+  }
+};
+
 $(window).on('resize', function () {
   $.each($.noty.layouts, function (index, layout) {
     layout.container.style.apply($(layout.container.selector));
@@ -620,4 +832,8 @@ $(window).on('resize', function () {
 // Helpers
 window.noty = function noty(options) {
   return $.notyRenderer.init(options);
+};
+
+window.pushNoty = function pushNoty(options) {
+  return $.notyPushRenderer.init(options);
 };
